@@ -1,0 +1,68 @@
+name: JavaScript CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: ESLint code-quality check
+        run: npm run lint
+
+      - name: Prettier formatting check
+        run: npm run format:check
+
+      - name: Jest unit tests with coverage
+        run: npm run test:coverage
+
+      - name: JavaScript security scan
+        run: npm run security
+
+      - name: Dependency vulnerability scan
+        run: npm audit --audit-level=high
+
+      - name: Build Docker image
+        run: docker build -t cloud-health-monitor:ci .
+
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: jest-coverage-report
+          path: coverage/
+          if-no-files-found: ignore
+
+      - name: Send CI email
+        if: always()
+        continue-on-error: true
+        env:
+          SMTP_SERVER: ${{ secrets.SMTP_SERVER }}
+          SMTP_PORT: ${{ secrets.SMTP_PORT }}
+          SMTP_USERNAME: ${{ secrets.SMTP_USERNAME }}
+          SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+          CI_EMAIL_RECIPIENT: ${{ secrets.CI_EMAIL_RECIPIENT }}
+          CI_STATUS: ${{ job.status }}
+        run: node scripts/send-ci-email.js

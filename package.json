@@ -1,0 +1,32 @@
+{
+  "name": "cloud-health-monitor",
+  "version": "1.0.0",
+  "private": true,
+  "description": "DevOps-style URL uptime + host health monitoring API, built with Express, tested with Jest, and shipped through a GitHub Actions CI pipeline (lint, format, test, security scan, dependency audit, Docker build, email notification).",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "test": "jest --runInBand",
+    "test:coverage": "jest --coverage --runInBand",
+    "lint": "eslint src tests scripts",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "security": "eslint -c eslint.security.config.js src scripts",
+    "audit": "npm audit --audit-level=high",
+    "ci:local": "npm run lint && npm run format:check && npm run test:coverage && npm run security && npm run audit"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "dependencies": {
+    "express": "4.22.3",
+    "nodemailer": "10.0.9"
+  },
+  "devDependencies": {
+    "eslint": "10.10.0",
+    "eslint-plugin-security": "4.0.1",
+    "jest": "30.5.1",
+    "prettier": "3.9.8",
+    "supertest": "7.1.4"
+  }
+}
