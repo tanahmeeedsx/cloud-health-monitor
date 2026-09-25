@@ -13,10 +13,7 @@ async function main() {
   const smtpPort = Number(required("SMTP_PORT", process.env.SMTP_PORT));
   const smtpUsername = required("SMTP_USERNAME", process.env.SMTP_USERNAME);
   const smtpPassword = required("SMTP_PASSWORD", process.env.SMTP_PASSWORD);
-  const recipient = required(
-    "CI_EMAIL_RECIPIENT",
-    process.env.CI_EMAIL_RECIPIENT,
-  );
+  const recipient = required("CI_EMAIL_RECIPIENT", process.env.CI_EMAIL_RECIPIENT);
 
   const status = process.env.CI_STATUS || "unknown";
   const repository = process.env.GITHUB_REPOSITORY || "unknown repository";

@@ -59,9 +59,7 @@ describe("POST /check-url", () => {
   });
 
   test("returns 500 when the URL check itself throws unexpectedly", async () => {
-    const spy = jest
-      .spyOn(monitoring, "checkUrl")
-      .mockRejectedValue(new Error("boom"));
+    const spy = jest.spyOn(monitoring, "checkUrl").mockRejectedValue(new Error("boom"));
     const response = await request(app)
       .post("/check-url")
       .send({ url: "https://example.com" });
