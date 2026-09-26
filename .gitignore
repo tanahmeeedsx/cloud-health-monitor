@@ -3,3 +3,5 @@ coverage/
 .env
 *.log
 .DS_Store
+aws/
+awscliv2.zip

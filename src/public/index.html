@@ -1,231 +1,430 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Cloud Health Monitor</title>
-<style>
-  :root {
-    --bg: #0a0e12;
-    --panel: #10161c;
-    --panel-border: #1e2a33;
-    --text: #dce6ee;
-    --text-dim: #6f8492;
-    --text-dimmer: #47565f;
-    --cyan: #2dd4bf;
-    --green: #34d399;
-    --amber: #f5a623;
-    --red: #f0554c;
-    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
-    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
-  }
-  * { box-sizing: border-box; }
-  body { margin: 0; background: var(--bg); color: var(--text); font-family: var(--sans); padding: 2.5rem 1.25rem 4rem; }
-  main { max-width: 780px; margin: 0 auto; }
-  header { display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1.75rem; }
-  h1 { font-size: 1.5rem; font-weight: 600; letter-spacing: -0.01em; margin: 0; }
-  .updated { font-family: var(--mono); font-size: 0.8rem; color: var(--text-dimmer); }
-  .status-banner { display: flex; align-items: center; gap: 0.75rem; background: var(--panel); border: 1px solid var(--panel-border); border-left: 3px solid var(--text-dimmer); border-radius: 6px; padding: 1rem 1.25rem; margin-bottom: 1.5rem; transition: border-left-color 0.3s ease; }
-  .status-banner.healthy { border-left-color: var(--green); }
-  .status-banner.degraded { border-left-color: var(--red); }
-  .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--text-dimmer); flex-shrink: 0; }
-  .status-banner.healthy .dot { background: var(--green); box-shadow: 0 0 0 0 rgba(52, 211, 153, 0.6); animation: pulse 2.2s ease-out infinite; }
-  .status-banner.degraded .dot { background: var(--red); }
-  @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(52, 211, 153, 0.5); } 70% { box-shadow: 0 0 0 8px rgba(52, 211, 153, 0); } 100% { box-shadow: 0 0 0 0 rgba(52, 211, 153, 0); } }
-  .status-text { font-size: 0.95rem; font-weight: 500; }
-  .status-sub { font-size: 0.8rem; color: var(--text-dim); margin-left: auto; font-family: var(--mono); }
-  .metrics { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.875rem; margin-bottom: 1.5rem; }
-  @media (max-width: 560px) { .metrics { grid-template-columns: 1fr; } }
-  .metric { background: var(--panel); border: 1px solid var(--panel-border); border-radius: 6px; padding: 1.1rem 1.1rem 1.25rem; }
-  .metric-label { font-size: 0.8rem; color: var(--text-dim); margin-bottom: 0.4rem; }
-  .metric-value { font-family: var(--mono); font-size: 1.9rem; font-weight: 600; line-height: 1; margin-bottom: 0.75rem; }
-  .bar-track { height: 5px; background: #1a232b; border-radius: 3px; overflow: hidden; }
-  .bar-fill { height: 100%; width: 0%; border-radius: 3px; background: var(--green); transition: width 0.6s ease, background 0.3s ease; }
-  section.panel { background: var(--panel); border: 1px solid var(--panel-border); border-radius: 6px; padding: 1.25rem 1.25rem 1.4rem; }
-  .panel h2 { font-size: 0.95rem; font-weight: 600; margin: 0 0 0.9rem; }
-  .check-row { display: flex; gap: 0.5rem; }
-  .check-row input { flex: 1; background: #0d1319; border: 1px solid var(--panel-border); border-radius: 5px; color: var(--text); padding: 0.55rem 0.7rem; font-family: var(--mono); font-size: 0.85rem; }
-  .check-row input:focus { outline: none; border-color: var(--cyan); }
-  .check-row button { background: var(--cyan); color: #062421; border: none; border-radius: 5px; padding: 0.55rem 1.1rem; font-weight: 600; font-size: 0.85rem; cursor: pointer; }
-  .check-row button:disabled { opacity: 0.5; cursor: default; }
-  .check-row button:focus-visible, .check-row input:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
-  .checks { margin-top: 1rem; display: flex; flex-direction: column; gap: 0.5rem; }
-  .check-item { display: flex; align-items: center; gap: 0.6rem; padding: 0.6rem 0.75rem; background: #0d1319; border: 1px solid var(--panel-border); border-radius: 5px; font-size: 0.82rem; }
-  .check-item .dot { flex-shrink: 0; }
-  .check-item.up .dot { background: var(--green); }
-  .check-item.down .dot { background: var(--red); }
-  .check-url { font-family: var(--mono); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text); }
-  .check-meta { font-family: var(--mono); color: var(--text-dim); flex-shrink: 0; }
-  .empty-note { color: var(--text-dimmer); font-size: 0.82rem; padding: 0.4rem 0.1rem; }
-  footer { margin-top: 2rem; text-align: center; font-size: 0.75rem; color: var(--text-dimmer); }
-</style>
-</head>
-<body>
-<main>
-  <header>
-    <h1>Cloud Health Monitor</h1>
-    <span class="updated" id="updated">connecting…</span>
-  </header>
-
-  <div class="status-banner" id="statusBanner">
-    <span class="dot"></span>
-    <span class="status-text" id="statusText">Checking system status…</span>
-    <span class="status-sub" id="statusSub"></span>
-  </div>
-
-  <div class="metrics">
-    <div class="metric">
-      <div class="metric-label">CPU</div>
-      <div class="metric-value" id="cpuValue">—</div>
-      <div class="bar-track"><div class="bar-fill" id="cpuBar"></div></div>
-    </div>
-    <div class="metric">
-      <div class="metric-label">Memory</div>
-      <div class="metric-value" id="memValue">—</div>
-      <div class="bar-track"><div class="bar-fill" id="memBar"></div></div>
-    </div>
-    <div class="metric">
-      <div class="metric-label">Disk</div>
-      <div class="metric-value" id="diskValue">—</div>
-      <div class="bar-track"><div class="bar-fill" id="diskBar"></div></div>
-    </div>
-  </div>
-
-  <section class="panel">
-    <h2>Check a URL</h2>
-    <div class="check-row">
-      <input type="text" id="urlInput" placeholder="https://example.com" autocomplete="off">
-      <button id="checkBtn">Check</button>
-    </div>
-    <div class="checks" id="checks">
-      <div class="empty-note">No checks yet — enter a URL above.</div>
-    </div>
-  </section>
-
-  <footer>Polling /system-status every 5s</footer>
-</main>
-
-<script>
-  const POLL_MS = 5000;
-  const THRESH = { warn: 70, bad: 90 };
-
-  const $ = (id) => document.getElementById(id);
-
-  function barColor(pct) {
-    if (pct >= THRESH.bad) return "var(--red)";
-    if (pct >= THRESH.warn) return "var(--amber)";
-    return "var(--green)";
-  }
-
-  function setMetric(prefix, pct) {
-    const value = $(prefix + "Value");
-    const bar = $(prefix + "Bar");
-    if (typeof pct !== "number" || Number.isNaN(pct)) {
-      value.textContent = "—";
-      bar.style.width = "0%";
-      return;
-    }
-    value.textContent = pct.toFixed(1) + "%";
-    bar.style.width = Math.min(pct, 100) + "%";
-    bar.style.background = barColor(pct);
-  }
-
-  function setBanner(healthy, reachable) {
-    const banner = $("statusBanner");
-    const text = $("statusText");
-    banner.classList.remove("healthy", "degraded");
-    if (!reachable) {
-      text.textContent = "Can't reach the monitoring API";
-      return;
-    }
-    if (healthy) {
-      banner.classList.add("healthy");
-      text.textContent = "All systems operational";
-    } else {
-      banner.classList.add("degraded");
-      text.textContent = "Degraded — one or more metrics over threshold";
-    }
-  }
-
-  async function poll() {
-    try {
-      const res = await fetch("/system-status");
-      const data = await res.json();
-      setMetric("cpu", data.cpuPercent);
-      setMetric("mem", data.memoryPercent);
-      setMetric("disk", data.diskPercent);
-      setBanner(data.healthy, true);
-      $("updated").textContent = "updated " + new Date().toLocaleTimeString();
-    } catch (err) {
-      setBanner(false, false);
-      $("updated").textContent = "connection lost";
-    }
-  }
-
-  function addCheckResult(result) {
-    const list = $("checks");
-    const empty = list.querySelector(".empty-note");
-    if (empty) empty.remove();
-
-    const item = document.createElement("div");
-    const up = result.isUp;
-    item.className = "check-item " + (up ? "up" : "down");
-
-    const meta = up
-      ? result.statusCode + " · " + result.responseTimeMs + "ms"
-      : (result.error || "unreachable");
-
-    item.innerHTML =
-      '<span class="dot"></span>' +
-      '<span class="check-url"></span>' +
-      '<span class="check-meta"></span>';
-    item.querySelector(".check-url").textContent = result.url;
-    item.querySelector(".check-meta").textContent = meta;
-
-    list.prepend(item);
-    while (list.children.length > 6) {
-      list.removeChild(list.lastChild);
-    }
-  }
-
-  async function runCheck() {
-    const input = $("urlInput");
-    const btn = $("checkBtn");
-    const url = input.value.trim();
-    if (!/^https?:\/\//.test(url)) {
-      input.focus();
-      return;
-    }
-    btn.disabled = true;
-    btn.textContent = "Checking…";
-    try {
-      const res = await fetch("/check-url", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ url }),
-      });
-      const data = await res.json();
-      if (res.ok) {
-        addCheckResult(data);
-        input.value = "";
-      } else {
-        addCheckResult({ url, isUp: false, error: data.detail || "request failed" });
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Cloud Health Monitor</title>
+    <style>
+      :root {
+        --bg: #0a0e12;
+        --panel: #10161c;
+        --panel-border: #1e2a33;
+        --text: #dce6ee;
+        --text-dim: #6f8492;
+        --text-dimmer: #47565f;
+        --cyan: #2dd4bf;
+        --green: #34d399;
+        --amber: #f5a623;
+        --red: #f0554c;
+        --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+        --sans:
+          -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
       }
-    } catch (err) {
-      addCheckResult({ url, isUp: false, error: "network error" });
-    } finally {
-      btn.disabled = false;
-      btn.textContent = "Check";
-    }
-  }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--text);
+        font-family: var(--sans);
+        padding: 2.5rem 1.25rem 4rem;
+      }
+      main {
+        max-width: 780px;
+        margin: 0 auto;
+      }
+      header {
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+        margin-bottom: 1.75rem;
+      }
+      h1 {
+        font-size: 1.5rem;
+        font-weight: 600;
+        letter-spacing: -0.01em;
+        margin: 0;
+      }
+      .updated {
+        font-family: var(--mono);
+        font-size: 0.8rem;
+        color: var(--text-dimmer);
+      }
+      .status-banner {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        background: var(--panel);
+        border: 1px solid var(--panel-border);
+        border-left: 3px solid var(--text-dimmer);
+        border-radius: 6px;
+        padding: 1rem 1.25rem;
+        margin-bottom: 1.5rem;
+        transition: border-left-color 0.3s ease;
+      }
+      .status-banner.healthy {
+        border-left-color: var(--green);
+      }
+      .status-banner.degraded {
+        border-left-color: var(--red);
+      }
+      .dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        background: var(--text-dimmer);
+        flex-shrink: 0;
+      }
+      .status-banner.healthy .dot {
+        background: var(--green);
+        box-shadow: 0 0 0 0 rgba(52, 211, 153, 0.6);
+        animation: pulse 2.2s ease-out infinite;
+      }
+      .status-banner.degraded .dot {
+        background: var(--red);
+      }
+      @keyframes pulse {
+        0% {
+          box-shadow: 0 0 0 0 rgba(52, 211, 153, 0.5);
+        }
+        70% {
+          box-shadow: 0 0 0 8px rgba(52, 211, 153, 0);
+        }
+        100% {
+          box-shadow: 0 0 0 0 rgba(52, 211, 153, 0);
+        }
+      }
+      .status-text {
+        font-size: 0.95rem;
+        font-weight: 500;
+      }
+      .status-sub {
+        font-size: 0.8rem;
+        color: var(--text-dim);
+        margin-left: auto;
+        font-family: var(--mono);
+      }
+      .metrics {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 0.875rem;
+        margin-bottom: 1.5rem;
+      }
+      @media (max-width: 560px) {
+        .metrics {
+          grid-template-columns: 1fr;
+        }
+      }
+      .metric {
+        background: var(--panel);
+        border: 1px solid var(--panel-border);
+        border-radius: 6px;
+        padding: 1.1rem 1.1rem 1.25rem;
+      }
+      .metric-label {
+        font-size: 0.8rem;
+        color: var(--text-dim);
+        margin-bottom: 0.4rem;
+      }
+      .metric-value {
+        font-family: var(--mono);
+        font-size: 1.9rem;
+        font-weight: 600;
+        line-height: 1;
+        margin-bottom: 0.75rem;
+      }
+      .bar-track {
+        height: 5px;
+        background: #1a232b;
+        border-radius: 3px;
+        overflow: hidden;
+      }
+      .bar-fill {
+        height: 100%;
+        width: 0%;
+        border-radius: 3px;
+        background: var(--green);
+        transition:
+          width 0.6s ease,
+          background 0.3s ease;
+      }
+      section.panel {
+        background: var(--panel);
+        border: 1px solid var(--panel-border);
+        border-radius: 6px;
+        padding: 1.25rem 1.25rem 1.4rem;
+      }
+      .panel h2 {
+        font-size: 0.95rem;
+        font-weight: 600;
+        margin: 0 0 0.9rem;
+      }
+      .check-row {
+        display: flex;
+        gap: 0.5rem;
+      }
+      .check-row input {
+        flex: 1;
+        background: #0d1319;
+        border: 1px solid var(--panel-border);
+        border-radius: 5px;
+        color: var(--text);
+        padding: 0.55rem 0.7rem;
+        font-family: var(--mono);
+        font-size: 0.85rem;
+      }
+      .check-row input:focus {
+        outline: none;
+        border-color: var(--cyan);
+      }
+      .check-row button {
+        background: var(--cyan);
+        color: #062421;
+        border: none;
+        border-radius: 5px;
+        padding: 0.55rem 1.1rem;
+        font-weight: 600;
+        font-size: 0.85rem;
+        cursor: pointer;
+      }
+      .check-row button:disabled {
+        opacity: 0.5;
+        cursor: default;
+      }
+      .check-row button:focus-visible,
+      .check-row input:focus-visible {
+        outline: 2px solid var(--cyan);
+        outline-offset: 2px;
+      }
+      .checks {
+        margin-top: 1rem;
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+      }
+      .check-item {
+        display: flex;
+        align-items: center;
+        gap: 0.6rem;
+        padding: 0.6rem 0.75rem;
+        background: #0d1319;
+        border: 1px solid var(--panel-border);
+        border-radius: 5px;
+        font-size: 0.82rem;
+      }
+      .check-item .dot {
+        flex-shrink: 0;
+      }
+      .check-item.up .dot {
+        background: var(--green);
+      }
+      .check-item.down .dot {
+        background: var(--red);
+      }
+      .check-url {
+        font-family: var(--mono);
+        flex: 1;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        color: var(--text);
+      }
+      .check-meta {
+        font-family: var(--mono);
+        color: var(--text-dim);
+        flex-shrink: 0;
+      }
+      .empty-note {
+        color: var(--text-dimmer);
+        font-size: 0.82rem;
+        padding: 0.4rem 0.1rem;
+      }
+      footer {
+        margin-top: 2rem;
+        text-align: center;
+        font-size: 0.75rem;
+        color: var(--text-dimmer);
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header>
+        <h1>Cloud Health Monitor</h1>
+        <span class="updated" id="updated">connecting…</span>
+      </header>
 
-  $("checkBtn").addEventListener("click", runCheck);
-  $("urlInput").addEventListener("keydown", (e) => {
-    if (e.key === "Enter") runCheck();
-  });
+      <div class="status-banner" id="statusBanner">
+        <span class="dot"></span>
+        <span class="status-text" id="statusText">Checking system status…</span>
+        <span class="status-sub" id="statusSub"></span>
+      </div>
 
-  poll();
-  setInterval(poll, POLL_MS);
-</script>
-</body>
+      <div class="metrics">
+        <div class="metric">
+          <div class="metric-label">CPU</div>
+          <div class="metric-value" id="cpuValue">—</div>
+          <div class="bar-track"><div class="bar-fill" id="cpuBar"></div></div>
+        </div>
+        <div class="metric">
+          <div class="metric-label">Memory</div>
+          <div class="metric-value" id="memValue">—</div>
+          <div class="bar-track"><div class="bar-fill" id="memBar"></div></div>
+        </div>
+        <div class="metric">
+          <div class="metric-label">Disk</div>
+          <div class="metric-value" id="diskValue">—</div>
+          <div class="bar-track"><div class="bar-fill" id="diskBar"></div></div>
+        </div>
+      </div>
+
+      <section class="panel">
+        <h2>Check a URL</h2>
+        <div class="check-row">
+          <input
+            type="text"
+            id="urlInput"
+            placeholder="https://example.com"
+            autocomplete="off"
+          />
+          <button id="checkBtn">Check</button>
+        </div>
+        <div class="checks" id="checks">
+          <div class="empty-note">No checks yet — enter a URL above.</div>
+        </div>
+      </section>
+
+      <footer>Polling /system-status every 5s</footer>
+    </main>
+
+    <script>
+      const POLL_MS = 5000;
+      const THRESH = { warn: 70, bad: 90 };
+
+      const $ = (id) => document.getElementById(id);
+
+      function barColor(pct) {
+        if (pct >= THRESH.bad) return "var(--red)";
+        if (pct >= THRESH.warn) return "var(--amber)";
+        return "var(--green)";
+      }
+
+      function setMetric(prefix, pct) {
+        const value = $(prefix + "Value");
+        const bar = $(prefix + "Bar");
+        if (typeof pct !== "number" || Number.isNaN(pct)) {
+          value.textContent = "—";
+          bar.style.width = "0%";
+          return;
+        }
+        value.textContent = pct.toFixed(1) + "%";
+        bar.style.width = Math.min(pct, 100) + "%";
+        bar.style.background = barColor(pct);
+      }
+
+      function setBanner(healthy, reachable) {
+        const banner = $("statusBanner");
+        const text = $("statusText");
+        banner.classList.remove("healthy", "degraded");
+        if (!reachable) {
+          text.textContent = "Can't reach the monitoring API";
+          return;
+        }
+        if (healthy) {
+          banner.classList.add("healthy");
+          text.textContent = "All systems operational";
+        } else {
+          banner.classList.add("degraded");
+          text.textContent = "Degraded — one or more metrics over threshold";
+        }
+      }
+
+      async function poll() {
+        try {
+          const res = await fetch("/system-status");
+          const data = await res.json();
+          setMetric("cpu", data.cpuPercent);
+          setMetric("mem", data.memoryPercent);
+          setMetric("disk", data.diskPercent);
+          setBanner(data.healthy, true);
+          $("updated").textContent = "updated " + new Date().toLocaleTimeString();
+        } catch (err) {
+          setBanner(false, false);
+          $("updated").textContent = "connection lost";
+        }
+      }
+
+      function addCheckResult(result) {
+        const list = $("checks");
+        const empty = list.querySelector(".empty-note");
+        if (empty) empty.remove();
+
+        const item = document.createElement("div");
+        const up = result.isUp;
+        item.className = "check-item " + (up ? "up" : "down");
+
+        const meta = up
+          ? result.statusCode + " · " + result.responseTimeMs + "ms"
+          : result.error || "unreachable";
+
+        item.innerHTML =
+          '<span class="dot"></span>' +
+          '<span class="check-url"></span>' +
+          '<span class="check-meta"></span>';
+        item.querySelector(".check-url").textContent = result.url;
+        item.querySelector(".check-meta").textContent = meta;
+
+        list.prepend(item);
+        while (list.children.length > 6) {
+          list.removeChild(list.lastChild);
+        }
+      }
+
+      async function runCheck() {
+        const input = $("urlInput");
+        const btn = $("checkBtn");
+        const url = input.value.trim();
+        if (!/^https?:\/\//.test(url)) {
+          input.focus();
+          return;
+        }
+        btn.disabled = true;
+        btn.textContent = "Checking…";
+        try {
+          const res = await fetch("/check-url", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ url }),
+          });
+          const data = await res.json();
+          if (res.ok) {
+            addCheckResult(data);
+            input.value = "";
+          } else {
+            addCheckResult({
+              url,
+              isUp: false,
+              error: data.detail || "request failed",
+            });
+          }
+        } catch (err) {
+          addCheckResult({ url, isUp: false, error: "network error" });
+        } finally {
+          btn.disabled = false;
+          btn.textContent = "Check";
+        }
+      }
+
+      $("checkBtn").addEventListener("click", runCheck);
+      $("urlInput").addEventListener("keydown", (e) => {
+        if (e.key === "Enter") runCheck();
+      });
+
+      poll();
+      setInterval(poll, POLL_MS);
+    </script>
+  </body>
 </html>
